@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package tasks;
+
+// The task service definition.
+service TaskService {
+  rpc SubmitTask(TaskRequest) returns (TaskResponse) {}
+  rpc QueryTaskStatus(QueryTaskRequest) returns (QueryTaskResponse) {}
+}
+
+// Message representing a request to submit a task.
+message TaskRequest {
+  string modelInfo = 1;
+  string datasetInfo = 2;
+  string executionParams = 3; // JSON string of execution parameters
+  int32 gpuRequirements = 4;  // Number of GPUs requested for the task
+}
+
+// Message representing a response to a task submission.
+message TaskResponse {
+  string taskId = 1;      // Unique ID for the task
+  string status = 2;      // Status of the task submission
+}
+
+// Message for querying the status of a task.
+message QueryTaskRequest {
+  string taskId = 1;
+}
+
+// Message representing the status of a queried task.
+message QueryTaskResponse {
+  string status = 1;      // Current status of the task
+  string resultData = 2;  // Data or results of the task, if available
+}
