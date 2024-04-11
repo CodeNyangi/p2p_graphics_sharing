@@ -11,7 +11,8 @@ module.exports = {
     testnet: {
       url: `https://eth-sepolia.g.alchemy.com/v2/y3NM9NRZepDsjduwf9SDk-HYZLboAMDW`,
       accounts: {
-        mnemonic: process.env.TEST_NET_ACCOUNT_MNEMONIC
+        mnemonic: process.env.TEST_NET_ACCOUNT_MNEMONIC,
+        gasPrice: 20000000000 // 20 Gwei
       }
     }
   }

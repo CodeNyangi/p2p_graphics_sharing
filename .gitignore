@@ -4,3 +4,5 @@ node_modules
 package-lock.json
 /.vscode/
 .env
+/smartcontract/artifacts/
+/smartcontract/cache/
