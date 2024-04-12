@@ -42,4 +42,4 @@ def fine_tune_model( model, datasets, parameters):
         status = response.status
         print(f"Model parameters updated. Status: {status}.")
 
-        
+    return model

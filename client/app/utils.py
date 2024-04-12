@@ -37,6 +37,10 @@ def start_training_session(gpu_id, parameterHash ):
     txn = gpu_rental.functions.startTrainingSession(gpu_id, parameterHash)
     return send_transaction(txn, account)
 
-def update_gpu_price(gpu_id, price):
-    txn = gpu_rental.functions.updateGPUComputePrice(gpu_id, price)
+def complete_training_session( session_id, is_completed):
+    txn = gpu_rental.functions.completeTrainingSession(session_id, is_completed)
+    return send_transaction(txn, account)
+
+def update_gpu_specs(address, specs, price):
+    txn = gpu_rental.functions.updateGPUSpecs(address, specs, price)
     return send_transaction(txn, account)

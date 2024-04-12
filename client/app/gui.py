@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk, scrolledtext
-from utils import list_gpu
+from utils import list_gpu, update_gpu_specs
 import grpc 
 import tasks_pb2
 import tasks_pb2_grpc
@@ -16,39 +16,27 @@ class ApplicationGUI(tk.Frame):
         self.master.title("Distributed GPU Training Management")
 
         # Section to list GPUs,  Speces, Prices, and Address
-        self.list_frame = ttk.LabelFrame(self, text="List a New GPU")
+        self.list_frame = ttk.LabelFrame(self, text="Update My GPU Specs and Price")
         self.list_frame.pack(fill="x", padx=10, pady=5)
-        ttk.Label(self.list_frame, text="Specs:").pack(side="left", padx=5, pady=5)
+        ttk.Label(self.list_frame, text="GPU Specs:").pack(side="left", padx=5, pady=5)
         self.specs_entry = ttk.Entry(self.list_frame)
         self.specs_entry.pack(side="left", fill="x", expand=True, padx=5, pady=5)
-
-        ttk.Label(self.list_frame, text="Price Per Compute Unit:").pack(side="left", padx=5, pady=5)
+        ttk.Label(self.list_frame, text="Price per Compute Unit:").pack(side="left", padx=5, pady=5)
         self.price_entry = ttk.Entry(self.list_frame)
         self.price_entry.pack(side="left", fill="x", expand=True, padx=5, pady=5)
-        self.list_button = ttk.Button(self.list_frame, text="List GPU", command=self.list_gpu)
-        self.list_button.pack(side="right", padx=10, pady=5)
-
         ttk.Label(self.list_frame, text="Address:").pack(side="left", padx=5, pady=5)
         self.address_entry = ttk.Entry(self.list_frame)
         self.address_entry.pack(side="left", fill="x", expand=True, padx=5, pady=5)
+        self.list_button = ttk.Button(self.list_frame, text="List GPU", command=self.update_gpu_specs)
+        self.list_button.pack(side="right", padx=10, pady=5)
 
-        # Section to rent GPUs
-        self.rent_frame = ttk.LabelFrame(self, text="Rent GPU")
-        self.rent_frame.pack(fill="x", padx=10, pady=5)
-        ttk.Label(self.rent_frame, text="GPU ID:").pack(side="left", padx=5, pady=5)
-        self.gpu_id_entry = ttk.Entry(self.rent_frame)
-        self.gpu_id_entry.pack(side="left", fill="x", expand=True, padx=5, pady=5)
-        ttk.Label(self.rent_frame, text="Compute Units:").pack(side="left", padx=5, pady=5)
-        self.compute_units_entry = ttk.Entry(self.rent_frame)
-        self.compute_units_entry.pack(side="left", fill="x", expand=True, padx=5, pady=5)
-        ttk.Label(self.rent_frame, text="Model:").pack(side="left", padx=5, pady=5)
-        self.model_entry = ttk.Entry(self.rent_frame)
-        self.model_entry.pack(side="left", fill="x", expand=True, padx=5, pady=5)
-        ttk.Label(self.rent_frame, text="Dataset:").pack(side="left", padx=5, pady=5)
-        self.dataset_entry = ttk.Entry(self.rent_frame)
-        self.dataset_entry.pack(side="left", fill="x", expand=True, padx=5, pady=5)
-        self.rent_button = ttk.Button(self.rent_frame, text="Rent GPU", command=self.rent_gpu)
-        self.rent_button.pack(side="right", padx=10, pady=5)
+        # Modify the listing area to include a multi-selection listbox for GPUs
+        self.list_frame = ttk.LabelFrame(self, text="Available GPUs")
+        self.list_frame.pack(fill="x", padx=10, pady=5)
+        self.gpu_listbox = tk.Listbox(self.list_frame, selectmode='multiple', height=6)  # Allow multi-selection
+        self.gpu_listbox.pack(side="left", fill="x", expand=True, padx=10, pady=5)
+        self.refresh_button = ttk.Button(self.list_frame, text="Refresh GPU List", command=self.list_gpu)
+        self.refresh_button.pack(side="right", padx=10, pady=5)
 
         # Status display
         self.status_frame = ttk.LabelFrame(self, text="Status")
@@ -73,55 +61,93 @@ class ApplicationGUI(tk.Frame):
         self.device_entry = ttk.Entry(self.update_frame)
         self.device_entry.pack(side="left", fill="x", expand=True, padx=5, pady=5)
 
-        self.send_button = tk.Button(self, text="Send Dataset", command=self.start_training_session)
+        self.send_button = tk.Button(self, text="Start Training Session", command=self.start_training_session)
         self.send_button.pack(side="top")
         self.quit_button = tk.Button(self, text="QUIT", fg="red", command=self.master.destroy)
         self.quit_button.pack(side="bottom")
 
        # grpc and rent gpus 
     def rent_gpu(self):
-        gpu_id = self.gpu_id_entry.get()
-        address = self.address_entry.get()
-        compute_units = int(self.compute_units_entry.get())
 
-        # Call the rent_gpu function from grpc with the selected parameters
-        channel = grpc.insecure_channel(address)
-        stub = tasks_pb2_grpc.TaskServiceStub(channel)
-        response = stub.RentGPU(tasks_pb2.RentGPURequest(gpu_id=gpu_id, compute_units=compute_units))
-        status = response.status
-        # Update the status display
-        self.update_status(f"Rented GPU {gpu_id} with {compute_units} compute units. Status: {status}.")
+        # Rent GPU with the selected parameters
+        selected_indices = self.gpu_listbox.curselection()
+        if not selected_indices:
+            messagebox.showerror("Error", "Please select a GPU to rent.")
+            return
+        
+        selected_gpus = [self.gpu_list[int(i)] for i in selected_indices]  # 이전에 gpu_list에 gpu 정보가 저장되어 있다고 가정
+        for gpu in selected_gpus:
+            gpu_id = gpu['id']
+            address = gpu['address']
+            compute_units = int(self.compute_units_entry.get())
+            channel = grpc.insecure_channel(address)
+            stub = tasks_pb2_grpc.TaskServiceStub(channel)
+            response = stub.RentGPU(tasks_pb2.RentGPURequest(gpu_id=gpu_id, compute_units=compute_units))
+            status = response.status
+            self.update_status(f"Rented GPU {gpu_id} with {compute_units} compute units. Status: {status}.")
 
-    # Send model data to selected and rent gpu address by grpc
+
+    # start training session to selecteds address by grpc
     def start_training_session(self):
-        gpu_id = self.gpu_id_entry.get()
-        model = self.model_entry.get()
-        epoch = int(self.epoch_entry.get())
-        device = self.device_entry.get()
-        parameters = tasks_pb2.ModelParameters(epoch=epoch, device=device)
-        filename = filedialog.askopenfilename()  # Choose the file to send
-        address = self.address_entry.get()
-        if filename:
-            with open(filename, 'rb') as f:
-                dataset = f.read()
+        selected_indices = self.gpu_listbox.curselection()
+        if not selected_indices:
+            messagebox.showerror("Error", "Please select a GPU to start the training session.")
+            return
+        
+        selected_gpus = [self.gpu_list[int(i)] for i in selected_indices]  # 이전에 gpu_list에 gpu 정보가 저장되어 있다고 가정
 
+        filename = filedialog.askopenfilename()  # Choose the file to send
+        if not filename:
+            messagebox.showerror("Error", "No dataset file selected.")
+            return
+
+        with open(filename, 'rb') as f:
+            dataset = f.read()
+
+        # 데이터셋 분할
+        total_gpus = len(selected_gpus)
+        chunk_size = len(dataset) // total_gpus
+        dataset_chunks = [dataset[i * chunk_size:(i + 1) * chunk_size] for i in range(total_gpus)]
+        if len(dataset) % total_gpus:
+            dataset_chunks[-1] += dataset[-(len(dataset) % total_gpus):]
+
+        # 각 GPU에 데이터셋 조각 전송
+        for gpu, data_chunk in zip(selected_gpus, dataset_chunks):
+            gpu_id = gpu['id']
+            model = self.model_entry.get()
+            epoch = int(self.epoch_entry.get())
+            device = self.device_entry.get()
+            parameters = tasks_pb2.ModelParameters(epoch=epoch, device=device)
+            address = gpu['address']  # 각 GPU의 주소 사용
             channel = grpc.insecure_channel(address)
             stub = tasks_pb2_grpc.TaskServiceStub(channel)
 
-            response = stub.StartTrainingSession(tasks_pb2.StartTrainingSessionRequest( gpu_id=gpu_id, model_data = tasks_pb2.ModelData(model=model, dataset=dataset, parameters=parameters)))
-            if response.status == "success":
-                messagebox.showinfo("Success", "Model data sent successfully!")
+            response = stub.StartTrainingSession(tasks_pb2.StartTrainingSessionRequest(
+                gpu_id=gpu_id, model_data=tasks_pb2.ModelData(model=model, dataset=data_chunk, parameters=parameters)
+            ))
+            if response.status != "success":
+                messagebox.showerror("Error", f"Failed to send model data to GPU {gpu_id}")
             else:
-                messagebox.showerror("Error", "Failed to send model data.")
+                messagebox.showinfo("Success", f"Model data sent successfully to GPU {gpu_id}!")
+
+
 
     # List gpu with specs and price and address
     def list_gpu(self):
-        specs = self.specs_entry.get()
-        price_per_compute_unit = float(self.price_entry.get())
-        list_gpu(specs, price_per_compute_unit)
+        self.gpu_listbox.delete(0, tk.END)
+        gpus = list_gpu()
+        for gpu in gpus:
+            self.gpu_listbox.insert(tk.END, f"{gpu['gpu_id']} - {gpu['specs']} - {gpu['price']} - {gpu['address']}")
 
-        # Update the status display
-        self.update_status(f"GPU listed with specs: {specs} at {price_per_compute_unit} per unit.")
+    # Register My GPU Specs and Price
+    def update_gpu_specs(self):
+        specs = self.specs_entry.get()
+        price = self.price_entry.get()
+        address = self.address_entry.get()
+        if specs and price and address:
+            update_gpu_specs(address, specs, price)
+            self.update_status(f"Updated GPU specs to {specs} and price to {price}.")
+            
 
     def update_status(self, message):
         self.status_text.insert(tk.END, f"{message}\n")

@@ -2,7 +2,7 @@ import grpc
 from concurrent import futures
 import tasks_pb2_grpc
 import tasks_pb2  # Assuming this protobuf file defines the necessary request and response messages
-from utils import rent_gpu, start_training_session
+from utils import rent_gpu, start_training_session, complete_training_session
 import threading
 import train_finetune
 import os
@@ -45,6 +45,10 @@ class P2PNode(tasks_pb2_grpc.TaskServiceServicer):
         parameter_hash = hash(model_data)
         session_id = start_training_session(gpu_id, parameter_hash)
         train_finetune.fine_tune_model(model, dataset, parameters)
+
+        # When done training, complete the training session
+        complete_training_session(session_id, is_completed=True)
+
         return tasks_pb2.SessionResponse(session_id=session_id)
 
     def UpdateModelParameters(self, request, context):
