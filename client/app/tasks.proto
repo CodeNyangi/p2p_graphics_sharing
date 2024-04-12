@@ -4,29 +4,21 @@ package tasks;
 
 // Define a service for handling GPU-related tasks and training sessions
 service TaskService {
-  rpc RentAndStartSession(RentAndStartSessionRequest) returns (SessionResponse);
-  rpc UpdateTraining(UpdateTrainingRequest) returns (GenericResponse);
-  rpc ChangeAggregator(ChangeAggregatorRequest) returns (GenericResponse);
+  rpc RentGPU(RentGPURequest) returns (GenericResponse);
   rpc ReleaseGPU(ReleaseGPURequest) returns (GenericResponse);
+  rpc StartTrainingSession(StartTrainingSessionRequest) returns (SessionResponse);
+  rpc UpdateModelParameters(UpdateModelParametersRequest) returns (UpdateModelParametersResponse);
 }
 
 // Request messages
-message RentAndStartSessionRequest {
+message RentGPURequest {
   int32 gpu_id = 1;
   int32 compute_units = 2;
-  string model = 3;
-  string dataset = 4;
 }
 
-message UpdateTrainingRequest {
-  int32 session_id = 1;
-  int32 epoch = 2;
-  string parameter_hash = 3;
-}
-
-message ChangeAggregatorRequest {
-  int32 session_id = 1;
-  string new_aggregator = 2;
+message StartTrainingSessionRequest {
+  int32 gpu_id = 1;
+  bytes model_data = 2;  // The serialized model data or parameters.
 }
 
 message ReleaseGPURequest {
@@ -40,4 +32,15 @@ message SessionResponse {
 
 message GenericResponse {
   string status = 1;
+}
+
+
+// Message to send updated model parameters during training.
+message UpdateModelParametersRequest {
+  int32 session_id = 1;
+  bytes model_parameters = 2;  // Updated model parameters for synchronization.
+}
+
+message UpdateModelParametersResponse {
+  string status = 1;  // Response status, e.g., "updated" or "error".
 }

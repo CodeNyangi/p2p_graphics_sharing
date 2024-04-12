@@ -1,6 +1,9 @@
 import tkinter as tk
-from tkinter import messagebox, scrolledtext, ttk
-from utils import list_gpu, rent_gpu, start_training_session, update_training, change_aggregator
+from tkinter import filedialog, messagebox, ttk, scrolledtext
+from utils import list_gpu
+import grpc 
+import tasks_pb2
+import tasks_pb2_grpc
 
 class ApplicationGUI(tk.Frame):
     def __init__(self, master=None):
@@ -12,17 +15,22 @@ class ApplicationGUI(tk.Frame):
     def create_widgets(self):
         self.master.title("Distributed GPU Training Management")
 
-        # Section to list GPUs
+        # Section to list GPUs,  Speces, Prices, and Address
         self.list_frame = ttk.LabelFrame(self, text="List a New GPU")
         self.list_frame.pack(fill="x", padx=10, pady=5)
         ttk.Label(self.list_frame, text="Specs:").pack(side="left", padx=5, pady=5)
         self.specs_entry = ttk.Entry(self.list_frame)
         self.specs_entry.pack(side="left", fill="x", expand=True, padx=5, pady=5)
+
         ttk.Label(self.list_frame, text="Price Per Compute Unit:").pack(side="left", padx=5, pady=5)
         self.price_entry = ttk.Entry(self.list_frame)
         self.price_entry.pack(side="left", fill="x", expand=True, padx=5, pady=5)
         self.list_button = ttk.Button(self.list_frame, text="List GPU", command=self.list_gpu)
         self.list_button.pack(side="right", padx=10, pady=5)
+
+        ttk.Label(self.list_frame, text="Address:").pack(side="left", padx=5, pady=5)
+        self.address_entry = ttk.Entry(self.list_frame)
+        self.address_entry.pack(side="left", fill="x", expand=True, padx=5, pady=5)
 
         # Section to rent GPUs
         self.rent_frame = ttk.LabelFrame(self, text="Rent GPU")
@@ -48,7 +56,6 @@ class ApplicationGUI(tk.Frame):
         self.status_text = scrolledtext.ScrolledText(self.status_frame)
         self.status_text.pack(fill="both", expand=True, padx=10, pady=5)
 
-    def create_training_controls(self):
         # Controls for updating training sessions
         self.update_frame = ttk.LabelFrame(self, text="Update Training Session")
         self.update_frame.pack(fill="x", padx=10, pady=5)
@@ -61,54 +68,65 @@ class ApplicationGUI(tk.Frame):
         self.epoch_entry = ttk.Entry(self.update_frame)
         self.epoch_entry.pack(side="left", fill="x", expand=True, padx=5, pady=5)
 
-        ttk.Label(self.update_frame, text="Parameter Hash:").pack(side="left", padx=5, pady=5)
-        self.param_hash_entry = ttk.Entry(self.update_frame)
-        self.param_hash_entry.pack(side="left", fill="x", expand=True, padx=5, pady=5)
+        # Label for device only cuda
+        ttk.Label(self.update_frame, text="Device:").pack(side="left", padx=5, pady=5)
+        self.device_entry = ttk.Entry(self.update_frame)
+        self.device_entry.pack(side="left", fill="x", expand=True, padx=5, pady=5)
 
-        self.update_button = ttk.Button(self.update_frame, text="Update Training", command=self.update_training)
-        self.update_button.pack(side="right", padx=10, pady=5)
+        self.send_button = tk.Button(self, text="Send Dataset", command=self.start_training_session)
+        self.send_button.pack(side="top")
+        self.quit_button = tk.Button(self, text="QUIT", fg="red", command=self.master.destroy)
+        self.quit_button.pack(side="bottom")
 
-        # Controls for changing the aggregator
-        self.change_agg_frame = ttk.LabelFrame(self, text="Change Aggregator")
-        self.change_agg_frame.pack(fill="x", padx=10, pady=5)
+       # grpc and rent gpus 
+    def rent_gpu(self):
+        gpu_id = self.gpu_id_entry.get()
+        address = self.address_entry.get()
+        compute_units = int(self.compute_units_entry.get())
 
-        ttk.Label(self.change_agg_frame, text="New Aggregator Address:").pack(side="left", padx=5, pady=5)
-        self.new_agg_entry = ttk.Entry(self.change_agg_frame)
-        self.new_agg_entry.pack(side="left", fill="x", expand=True, padx=5, pady=5)
+        # Call the rent_gpu function from grpc with the selected parameters
+        channel = grpc.insecure_channel(address)
+        stub = tasks_pb2_grpc.TaskServiceStub(channel)
+        response = stub.RentGPU(tasks_pb2.RentGPURequest(gpu_id=gpu_id, compute_units=compute_units))
+        status = response.status
+        # Update the status display
+        self.update_status(f"Rented GPU {gpu_id} with {compute_units} compute units. Status: {status}.")
 
-        self.change_agg_button = ttk.Button(self.change_agg_frame, text="Change Aggregator", command=self.change_aggregator)
-        self.change_agg_button.pack(side="right", padx=10, pady=5)
-
-    def update_training(self):
-        session_id = int(self.session_id_entry.get())
+    # Send model data to selected and rent gpu address by grpc
+    def start_training_session(self):
+        gpu_id = self.gpu_id_entry.get()
+        model = self.model_entry.get()
         epoch = int(self.epoch_entry.get())
-        parameter_hash = self.param_hash_entry.get()
-        update_training(session_id, epoch, parameter_hash)
-        self.update_status(f"Updated training for session {session_id} to epoch {epoch}.")
+        device = self.device_entry.get()
+        parameters = tasks_pb2.ModelParameters(epoch=epoch, device=device)
+        filename = filedialog.askopenfilename()  # Choose the file to send
+        address = self.address_entry.get()
+        if filename:
+            with open(filename, 'rb') as f:
+                dataset = f.read()
 
-    def change_aggregator(self):
-        session_id = int(self.session_id_entry.get())
-        new_aggregator = self.new_agg_entry.get()
-        change_aggregator(session_id, new_aggregator)
-        self.update_status(f"Changed aggregator for session {session_id} to {new_aggregator}.")
+            channel = grpc.insecure_channel(address)
+            stub = tasks_pb2_grpc.TaskServiceStub(channel)
 
+            response = stub.StartTrainingSession(tasks_pb2.StartTrainingSessionRequest( gpu_id=gpu_id, model_data = tasks_pb2.ModelData(model=model, dataset=dataset, parameters=parameters)))
+            if response.status == "success":
+                messagebox.showinfo("Success", "Model data sent successfully!")
+            else:
+                messagebox.showerror("Error", "Failed to send model data.")
+
+    # List gpu with specs and price and address
     def list_gpu(self):
         specs = self.specs_entry.get()
         price_per_compute_unit = float(self.price_entry.get())
         list_gpu(specs, price_per_compute_unit)
-        self.update_status(f"GPU listed with specs: {specs} at {price_per_compute_unit} per unit.")
 
-    def rent_gpu(self):
-        gpu_id = int(self.gpu_id_entry.get())
-        compute_units = int(self.compute_units_entry.get())
-        model = self.model_entry.get()
-        dataset = self.dataset_entry.get()
-        rent_gpu(gpu_id, compute_units, model, dataset)
-        self.update_status(f"GPU {gpu_id} rented for model {model} with dataset {dataset} using {compute_units} compute units.")
+        # Update the status display
+        self.update_status(f"GPU listed with specs: {specs} at {price_per_compute_unit} per unit.")
 
     def update_status(self, message):
         self.status_text.insert(tk.END, f"{message}\n")
         self.status_text.see(tk.END)
+
 
 if __name__ == "__main__":
     root = tk.Tk()

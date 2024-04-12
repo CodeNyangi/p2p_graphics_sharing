@@ -10,12 +10,9 @@ abstract contract GPURentalBase is ReentrancyGuard, Ownable {
         string specs;
         uint256 pricePerComputeUnit;
         bool isAvailable;
-        string currentTaskModel; // Name of the model currently being trained
-        string currentDataset;
     }
 
     struct TrainingSession {
-        uint256 currentEpoch;
         address aggregatorNode;
         string parameterHash;
     }
@@ -27,12 +24,9 @@ abstract contract GPURentalBase is ReentrancyGuard, Ownable {
     mapping(uint256 => uint256) public taskToRentalStartTime;
     mapping(address => uint256) public providerReputation;
 
-    event GPURented(uint256 indexed gpuId, address indexed renter, uint256 computeUnits, uint256 totalCost, string model, string dataset);
-    event ModelAssigned(uint256 indexed gpuId, string modelName);
+    event GPURented(uint256 indexed gpuId, address indexed renter, uint256 computeUnits, uint256 totalCost);
     event GPUListed(uint256 indexed gpuId, string specs, uint256 pricePerComputeUnit);
     event PaymentReleased(uint256 indexed gpuId, address indexed provider);
-    event CommissionAdjusted(uint256 newCommissionPercent);
-    event TrainingUpdated(uint256 indexed sessionId, uint256 epoch, string parameterHash);
 
 
     // Constructor that accepts an initial owner address
@@ -40,38 +34,23 @@ abstract contract GPURentalBase is ReentrancyGuard, Ownable {
         // You can include additional initializations here if necessary
     }
 
-    function assignModel(uint256 gpuId, string memory modelName) external {
-        gpus[gpuId].currentTaskModel = modelName;
-        emit ModelAssigned(gpuId, modelName);
-    }
-
-     function startTrainingSession(uint256 gpuId) external returns (uint256) {
-        require(gpus[gpuId].isAvailable, "GPU must be rented first");
+     function startTrainingSession(
+        uint256 gpuId, 
+        string memory _parameterHash
+         ) external returns (uint256) {
+        require(!gpus[gpuId].isAvailable, "GPU must be rented first");
         uint256 sessionId = uint256(keccak256(abi.encodePacked(block.timestamp, msg.sender, gpuId)));
-        sessions[sessionId] = TrainingSession(0, msg.sender, "");
+        sessions[sessionId] = TrainingSession(msg.sender, _parameterHash);
         return sessionId;
     }
 
-    function updateTraining(uint256 sessionId, uint256 epoch, string memory parameterHash) external {
-        TrainingSession storage session = sessions[sessionId];
-        require(msg.sender == session.aggregatorNode, "Only the aggregator node can update training");
-        session.currentEpoch = epoch;
-        session.parameterHash = parameterHash;
-        emit TrainingUpdated(sessionId, epoch, parameterHash);
-    }
-
-    function changeAggregator(uint256 sessionId, address newAggregator) external onlyOwner {
-        TrainingSession storage session = sessions[sessionId];
-        session.aggregatorNode = newAggregator;
-    }
-
     function listGPU(string memory _specs, uint256 _pricePerComputeUnit) external {
-        gpus.push(GPU(payable(msg.sender), _specs, _pricePerComputeUnit, true, "", ""));
+        gpus.push(GPU(payable(msg.sender), _specs, _pricePerComputeUnit, true));
         emit GPUListed(gpus.length - 1, _specs, _pricePerComputeUnit);
     }
 
 
-    function rentGPU(uint256 _gpuId, uint256 _computeUnits, string memory _model, string memory _dataset) external payable nonReentrant {
+    function rentGPU(uint256 _gpuId, uint256 _computeUnits) external payable nonReentrant {
         GPU storage gpu = gpus[_gpuId];
         require(gpu.isAvailable, "GPU not available");
         require(msg.value >= gpu.pricePerComputeUnit * _computeUnits, "Insufficient payment");
@@ -86,10 +65,7 @@ abstract contract GPURentalBase is ReentrancyGuard, Ownable {
         safeTransfer(gpu.owner, paymentToProvider);
         safeTransfer(payable(owner()), platformCommission);
 
-        gpus[_gpuId].currentTaskModel = _model;
-        gpus[_gpuId].currentDataset = _dataset;
-
-        emit GPURented(_gpuId, msg.sender, _computeUnits, msg.value, _model, _dataset);
+        emit GPURented(_gpuId, msg.sender, _computeUnits, msg.value);
     }
 
     function releaseGPU(uint256 _gpuId) external nonReentrant {
@@ -105,10 +81,6 @@ abstract contract GPURentalBase is ReentrancyGuard, Ownable {
     function updateGPUComputePrice(uint256 _gpuId, uint256 _newPrice) external onlyOwner {
         GPU storage gpu = gpus[_gpuId];
         gpu.pricePerComputeUnit = _newPrice;
-    }
-
-    function getTotalGPUs() external view returns (uint256) {
-        return gpus.length;
     }
 
     // New helper function for safer Ether transfers

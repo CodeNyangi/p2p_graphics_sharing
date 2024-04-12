@@ -9,6 +9,7 @@ with open('GPURentalABI.json', 'r') as abi_file:
 
 contract_address = '0x...ContractAddress...'
 gpu_rental = web3.eth.contract(address=contract_address, abi=contract_abi)
+account = web3.eth.account
 
 def send_transaction(function_call, account, value=0):
     txn = function_call.buildTransaction({
@@ -21,22 +22,21 @@ def send_transaction(function_call, account, value=0):
     signed_txn = web3.eth.account.signTransaction(txn, private_key='YOUR_PRIVATE_KEY')
     return web3.eth.sendRawTransaction(signed_txn.rawTransaction)
 
-def rent_gpu(gpu_id, compute_units, model, dataset, account, value):
-    txn = gpu_rental.functions.rentGPU(gpu_id, compute_units, model, dataset)
+def list_gpu():
+    return gpu_rental.functions.listGPU().call()
+
+def rent_gpu(gpu_id, compute_units, value):
+    txn = gpu_rental.functions.rentGPU(gpu_id, compute_units)
     return send_transaction(txn, account, value=value)
 
-def release_gpu(gpu_id, account):
+def release_gpu(gpu_id):
     txn = gpu_rental.functions.releaseGPU(gpu_id)
     return send_transaction(txn, account)
 
-def start_training_session(gpu_id, account):
-    txn = gpu_rental.functions.startTrainingSession(gpu_id)
+def start_training_session(gpu_id, parameterHash ):
+    txn = gpu_rental.functions.startTrainingSession(gpu_id, parameterHash)
     return send_transaction(txn, account)
 
-def update_training(session_id, epoch, parameter_hash, account):
-    txn = gpu_rental.functions.updateTraining(session_id, epoch, parameter_hash)
-    return send_transaction(txn, account)
-
-def change_aggregator(session_id, new_aggregator, account):
-    txn = gpu_rental.functions.changeAggregator(session_id, new_aggregator)
+def update_gpu_price(gpu_id, price):
+    txn = gpu_rental.functions.updateGPUComputePrice(gpu_id, price)
     return send_transaction(txn, account)

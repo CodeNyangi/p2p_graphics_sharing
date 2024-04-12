@@ -15,19 +15,9 @@ class TaskServiceStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.RentAndStartSession = channel.unary_unary(
-                '/tasks.TaskService/RentAndStartSession',
-                request_serializer=tasks__pb2.RentAndStartSessionRequest.SerializeToString,
-                response_deserializer=tasks__pb2.SessionResponse.FromString,
-                )
-        self.UpdateTraining = channel.unary_unary(
-                '/tasks.TaskService/UpdateTraining',
-                request_serializer=tasks__pb2.UpdateTrainingRequest.SerializeToString,
-                response_deserializer=tasks__pb2.GenericResponse.FromString,
-                )
-        self.ChangeAggregator = channel.unary_unary(
-                '/tasks.TaskService/ChangeAggregator',
-                request_serializer=tasks__pb2.ChangeAggregatorRequest.SerializeToString,
+        self.RentGPU = channel.unary_unary(
+                '/tasks.TaskService/RentGPU',
+                request_serializer=tasks__pb2.RentGPURequest.SerializeToString,
                 response_deserializer=tasks__pb2.GenericResponse.FromString,
                 )
         self.ReleaseGPU = channel.unary_unary(
@@ -35,25 +25,23 @@ class TaskServiceStub(object):
                 request_serializer=tasks__pb2.ReleaseGPURequest.SerializeToString,
                 response_deserializer=tasks__pb2.GenericResponse.FromString,
                 )
+        self.StartTrainingSession = channel.unary_unary(
+                '/tasks.TaskService/StartTrainingSession',
+                request_serializer=tasks__pb2.StartTrainingSessionRequest.SerializeToString,
+                response_deserializer=tasks__pb2.SessionResponse.FromString,
+                )
+        self.UpdateModelParameters = channel.unary_unary(
+                '/tasks.TaskService/UpdateModelParameters',
+                request_serializer=tasks__pb2.UpdateModelParametersRequest.SerializeToString,
+                response_deserializer=tasks__pb2.UpdateModelParametersResponse.FromString,
+                )
 
 
 class TaskServiceServicer(object):
     """Define a service for handling GPU-related tasks and training sessions
     """
 
-    def RentAndStartSession(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def UpdateTraining(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def ChangeAggregator(self, request, context):
+    def RentGPU(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -65,28 +53,40 @@ class TaskServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def StartTrainingSession(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def UpdateModelParameters(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_TaskServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
-            'RentAndStartSession': grpc.unary_unary_rpc_method_handler(
-                    servicer.RentAndStartSession,
-                    request_deserializer=tasks__pb2.RentAndStartSessionRequest.FromString,
-                    response_serializer=tasks__pb2.SessionResponse.SerializeToString,
-            ),
-            'UpdateTraining': grpc.unary_unary_rpc_method_handler(
-                    servicer.UpdateTraining,
-                    request_deserializer=tasks__pb2.UpdateTrainingRequest.FromString,
-                    response_serializer=tasks__pb2.GenericResponse.SerializeToString,
-            ),
-            'ChangeAggregator': grpc.unary_unary_rpc_method_handler(
-                    servicer.ChangeAggregator,
-                    request_deserializer=tasks__pb2.ChangeAggregatorRequest.FromString,
+            'RentGPU': grpc.unary_unary_rpc_method_handler(
+                    servicer.RentGPU,
+                    request_deserializer=tasks__pb2.RentGPURequest.FromString,
                     response_serializer=tasks__pb2.GenericResponse.SerializeToString,
             ),
             'ReleaseGPU': grpc.unary_unary_rpc_method_handler(
                     servicer.ReleaseGPU,
                     request_deserializer=tasks__pb2.ReleaseGPURequest.FromString,
                     response_serializer=tasks__pb2.GenericResponse.SerializeToString,
+            ),
+            'StartTrainingSession': grpc.unary_unary_rpc_method_handler(
+                    servicer.StartTrainingSession,
+                    request_deserializer=tasks__pb2.StartTrainingSessionRequest.FromString,
+                    response_serializer=tasks__pb2.SessionResponse.SerializeToString,
+            ),
+            'UpdateModelParameters': grpc.unary_unary_rpc_method_handler(
+                    servicer.UpdateModelParameters,
+                    request_deserializer=tasks__pb2.UpdateModelParametersRequest.FromString,
+                    response_serializer=tasks__pb2.UpdateModelParametersResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -100,7 +100,7 @@ class TaskService(object):
     """
 
     @staticmethod
-    def RentAndStartSession(request,
+    def RentGPU(request,
             target,
             options=(),
             channel_credentials=None,
@@ -110,42 +110,8 @@ class TaskService(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/tasks.TaskService/RentAndStartSession',
-            tasks__pb2.RentAndStartSessionRequest.SerializeToString,
-            tasks__pb2.SessionResponse.FromString,
-            options, channel_credentials,
-            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
-
-    @staticmethod
-    def UpdateTraining(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/tasks.TaskService/UpdateTraining',
-            tasks__pb2.UpdateTrainingRequest.SerializeToString,
-            tasks__pb2.GenericResponse.FromString,
-            options, channel_credentials,
-            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
-
-    @staticmethod
-    def ChangeAggregator(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/tasks.TaskService/ChangeAggregator',
-            tasks__pb2.ChangeAggregatorRequest.SerializeToString,
+        return grpc.experimental.unary_unary(request, target, '/tasks.TaskService/RentGPU',
+            tasks__pb2.RentGPURequest.SerializeToString,
             tasks__pb2.GenericResponse.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
@@ -164,5 +130,39 @@ class TaskService(object):
         return grpc.experimental.unary_unary(request, target, '/tasks.TaskService/ReleaseGPU',
             tasks__pb2.ReleaseGPURequest.SerializeToString,
             tasks__pb2.GenericResponse.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def StartTrainingSession(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/tasks.TaskService/StartTrainingSession',
+            tasks__pb2.StartTrainingSessionRequest.SerializeToString,
+            tasks__pb2.SessionResponse.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def UpdateModelParameters(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/tasks.TaskService/UpdateModelParameters',
+            tasks__pb2.UpdateModelParametersRequest.SerializeToString,
+            tasks__pb2.UpdateModelParametersResponse.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
