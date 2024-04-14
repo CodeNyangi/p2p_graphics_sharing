@@ -1,7 +1,11 @@
+import tensorflow as tf
+from tensorflow import distribute
+from transformers import TFAutoModel, AutoConfig
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk, scrolledtext
 from utils import list_gpu, update_gpu_specs
 import grpc 
+import pickle
 import tasks_pb2
 import tasks_pb2_grpc
 
@@ -44,6 +48,34 @@ class ApplicationGUI(tk.Frame):
         self.status_text = scrolledtext.ScrolledText(self.status_frame)
         self.status_text.pack(fill="both", expand=True, padx=10, pady=5)
 
+        # Dropdown for selecting the learning strategy
+        self.strategy_var = tk.StringVar()
+        self.strategy_label = ttk.Label(root, text="Select Learning Strategy:")
+        self.strategy_label.pack(fill='x', padx=5, pady=5)
+        self.strategy_dropdown = ttk.Combobox(root, textvariable=self.strategy_var)
+        self.strategy_dropdown['values'] = ("Mirrored", "One Device")
+        self.strategy_dropdown.pack(fill='x', padx=5, pady=5)
+        # self.strategy_dropdown.bind("<<ComboboxSelected>>", self.on_strategy_change)
+
+        # Dropdown for selecting the training method
+        self.training_var = tk.StringVar()
+        self.training_label = ttk.Label(root, text="Select Training Method:")
+        self.training_label.pack(fill='x', padx=5, pady=5)
+        self.training_dropdown = ttk.Combobox(root, textvariable=self.training_var)
+        self.training_dropdown['values'] = ("Fine-tune", "Transfer Learning")
+        self.training_dropdown.pack(fill='x', padx=5, pady=5)
+        # self.training_dropdown.bind("<<ComboboxSelected>>", self.on_training_change)
+
+        # Load Model Entry
+        ttk.Label(self, text="Model Path:").pack(side="left", padx=5, pady=5)
+        self.model_entry = ttk.Entry(self)
+        self.model_entry.pack(side="left", fill="x", expand=True, padx=5, pady=5)
+
+        # Model Strategy Entry
+        ttk.Label(self, text="Compute Units:").pack(side="left", padx=5, pady=5)
+        self.model_strategy_entry = ttk.Entry(self)
+        self.model_strategy_entry.pack(side="left", fill="x", expand=True, padx=5, pady=5)
+
         # Controls for updating training sessions
         self.update_frame = ttk.LabelFrame(self, text="Update Training Session")
         self.update_frame.pack(fill="x", padx=10, pady=5)
@@ -56,7 +88,7 @@ class ApplicationGUI(tk.Frame):
         self.epoch_entry = ttk.Entry(self.update_frame)
         self.epoch_entry.pack(side="left", fill="x", expand=True, padx=5, pady=5)
 
-        # Label for device only cuda
+        # Label for device
         ttk.Label(self.update_frame, text="Device:").pack(side="left", padx=5, pady=5)
         self.device_entry = ttk.Entry(self.update_frame)
         self.device_entry.pack(side="left", fill="x", expand=True, padx=5, pady=5)
@@ -79,13 +111,13 @@ class ApplicationGUI(tk.Frame):
         for gpu in selected_gpus:
             gpu_id = gpu['id']
             address = gpu['address']
-            compute_units = int(self.compute_units_entry.get())
+            compute_units = gpu['compute_units']
             channel = grpc.insecure_channel(address)
             stub = tasks_pb2_grpc.TaskServiceStub(channel)
             response = stub.RentGPU(tasks_pb2.RentGPURequest(gpu_id=gpu_id, compute_units=compute_units))
             status = response.status
             self.update_status(f"Rented GPU {gpu_id} with {compute_units} compute units. Status: {status}.")
-
+    
 
     # start training session to selecteds address by grpc
     def start_training_session(self):
@@ -94,7 +126,7 @@ class ApplicationGUI(tk.Frame):
             messagebox.showerror("Error", "Please select a GPU to start the training session.")
             return
         
-        selected_gpus = [self.gpu_list[int(i)] for i in selected_indices]  # 이전에 gpu_list에 gpu 정보가 저장되어 있다고 가정
+        selected_gpus = [self.gpu_list[int(i)] for i in selected_indices]
 
         filename = filedialog.askopenfilename()  # Choose the file to send
         if not filename:
@@ -104,31 +136,81 @@ class ApplicationGUI(tk.Frame):
         with open(filename, 'rb') as f:
             dataset = f.read()
 
-        # 데이터셋 분할
-        total_gpus = len(selected_gpus)
-        chunk_size = len(dataset) // total_gpus
-        dataset_chunks = [dataset[i * chunk_size:(i + 1) * chunk_size] for i in range(total_gpus)]
-        if len(dataset) % total_gpus:
-            dataset_chunks[-1] += dataset[-(len(dataset) % total_gpus):]
+        # Assume the following attributes are set elsewhere in the GUI:
+        strategy_type = self.strategy_var.get()  # "Mirrored" or "One Device"
+        training_type = self.training_var.get()  # "Fine-tune" or "Transfer Learning"
 
-        # 각 GPU에 데이터셋 조각 전송
-        for gpu, data_chunk in zip(selected_gpus, dataset_chunks):
-            gpu_id = gpu['id']
-            model = self.model_entry.get()
-            epoch = int(self.epoch_entry.get())
-            device = self.device_entry.get()
-            parameters = tasks_pb2.ModelParameters(epoch=epoch, device=device)
-            address = gpu['address']  # 각 GPU의 주소 사용
-            channel = grpc.insecure_channel(address)
-            stub = tasks_pb2_grpc.TaskServiceStub(channel)
+        if strategy_type == "Mirrored":
+            # Using TensorFlow MirroredStrategy
+            strategy = distribute.MirroredStrategy(devices=[f"/gpu:{gpu['id'][-1]}" for gpu in selected_gpus])
+        elif strategy_type == "One Device":
+            # Using TensorFlow's simple device placement
+            strategy = tf.device(f"/gpu:{selected_gpus[0]['id'][-1]}")
 
-            response = stub.StartTrainingSession(tasks_pb2.StartTrainingSessionRequest(
-                gpu_id=gpu_id, model_data=tasks_pb2.ModelData(model=model, dataset=data_chunk, parameters=parameters)
-            ))
-            if response.status != "success":
-                messagebox.showerror("Error", f"Failed to send model data to GPU {gpu_id}")
-            else:
-                messagebox.showinfo("Success", f"Model data sent successfully to GPU {gpu_id}!")
+        with strategy.scope():
+            model = self.load_model()  # You'd need to define how to load your model based on the training type
+
+            # If using MirroredStrategy, TensorFlow handles data distribution internally
+            dataset_chunks = self.split_dataset(dataset, len(selected_gpus))
+
+            for gpu, data_chunk in zip(selected_gpus, dataset_chunks):
+                self.send_model_data_to_gpu(gpu, model, data_chunk)
+
+    def load_model(self):
+        # Assume self.model_entry.get() returns the model ID from Hugging Face
+        model_id = self.model_entry.get()
+
+        # Load the model configuration from Hugging Face
+        config = AutoConfig.from_pretrained(model_id)
+
+        # Load the model from Hugging Face
+        # If the model is a standard classification model, use TFAutoModelForSequenceClassification
+        # Adjust according to the specific type of model you are dealing with
+        model = TFAutoModel.from_pretrained(model_id, config=config)
+
+        return model
+        
+
+    def split_dataset(self, dataset, num_parts):
+        chunk_size = len(dataset) // num_parts
+        return [dataset[i * chunk_size:(i + 1) * chunk_size] for i in range(num_parts)]
+
+    def serialize_model(model):
+    # Serialize only the weights and model configuration
+        model_weights = model.get_weights()  # Get model weights as a list of numpy arrays
+        model_config = model.get_config()  # Get model configuration as a dictionary
+        
+        # Use pickle to serialize the model weights and config
+        serialized_model = pickle.dumps((model_config, model_weights))
+        return serialized_model
+
+    def serialize_data(data):
+        # Use pickle to serialize dataset
+        serialized_data = pickle.dumps(data)
+        return serialized_data
+
+    def send_model_data_to_gpu(self, gpu, model, dataset_chunk):
+        serialized_model = self.serialize_model(model)
+        serialized_data = self.serialize_data(dataset_chunk)
+
+        # Now send serialized data via gRPC
+        gpu_id = gpu['id']
+        address = gpu['address']
+        epoch = int(self.epoch_entry.get())  # Assuming this retrieves an integer epoch count
+        channel = grpc.insecure_channel(address)
+        stub = tasks_pb2_grpc.TaskServiceStub(channel)
+
+        response = stub.StartTrainingSession(tasks_pb2.StartTrainingSessionRequest(
+            gpu_id=gpu_id,
+            model_data=serialized_model,
+            dataset=serialized_data,
+            hyperparameters=tasks_pb2.ModelParameters(epoch=epoch, device=self.device_entry.get(), strategy=self.strategy_var.get(), training=self.training_var.get())
+        ))
+
+        if response.status != "success":
+            messagebox.showerror("Error", f"Failed to send model data to GPU {gpu_id}")
+        else:
+            messagebox.showinfo("Success", f"Model data sent successfully to GPU {gpu_id}!")
 
 
 
