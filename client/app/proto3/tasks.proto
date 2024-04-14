@@ -16,9 +16,18 @@ message RentGPURequest {
   int32 compute_units = 2;
 }
 
+message ModelParameters {
+  int32 epoch = 1;
+  string device = 2;  // Device on which to run the model (e.g., "gpu", "cpu")
+  string strategy = 3;  // Distributed strategy to use (e.g., "Mirrored", "OneDevice")
+  string training = 4;  // Type of training (e.g., "Fine-tune", "Transfer Learning")
+}
+
 message StartTrainingSessionRequest {
   int32 gpu_id = 1;
   bytes model_data = 2;  // The serialized model data or parameters.
+  bytes dataset = 3;  // The serialized dataset.
+  bytes hyperparameters = 4;  // The serialized hyperparameters.
 }
 
 message ReleaseGPURequest {
