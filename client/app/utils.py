@@ -1,15 +1,24 @@
 from web3 import Web3
 import json
 
-web3 = Web3(Web3.HTTPProvider('https://mainnet.infura.io/v3/YOUR_INFURA_PROJECT_ID'))
+# Load configuration from JSON file
+with open('config.json', 'r') as config_file:
+    config = json.load(config_file)
 
-# Load the contract ABI and Address
+# Initialize Web3 with the provider URL from the config
+web3 = Web3(Web3.HTTPProvider(config['provider_url']))
+
+# Load the contract ABI
 with open('GPURentalABI.json', 'r') as abi_file:
     contract_abi = json.load(abi_file)
 
-contract_address = '0x...ContractAddress...'
+# Get the contract address from the config
+contract_address = config['contract_address']
 gpu_rental = web3.eth.contract(address=contract_address, abi=contract_abi)
+
+# Assuming account setup is handled elsewhere appropriately
 account = web3.eth.account
+
 
 def send_transaction(function_call, account, value=0):
     txn = function_call.buildTransaction({
