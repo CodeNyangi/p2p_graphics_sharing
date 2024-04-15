@@ -1,7 +1,9 @@
 # train_transfer.py
 import tensorflow as tf
+import pickle
+from p2p_node import send_model_parameters
 
-def transfer_model(model, dataset_path, hyperparameters):
+def transfer_model(model, dataset_path, hyperparameters, strategy_type):
     # Load dataset
     train_dataset = tf.data.experimental.load(dataset_path)
 
@@ -24,10 +26,17 @@ def transfer_model(model, dataset_path, hyperparameters):
         metrics=['accuracy']
     )
 
-    # Extract specific hyperparameters
-    epochs = hyperparameters.epoch
-
-    # Start training
-    history = model.fit(train_dataset, epochs=epochs)
-
-    return history
+    if strategy_type == 'Mirrored':
+        strategy = tf.distribute.MirroredStrategy()
+        with strategy.scope():
+            model.fit(train_dataset, epochs=hyperparameters.epoch)
+            self.send_current_weights()
+    else:
+        model.fit(train_dataset, epochs=hyperparameters.epoch)
+        
+def send_current_weights(self):
+    # Serialize the model config and weights
+    serialized_model = pickle.dumps((self.model.get_config(), self.model.get_weights()))
+    # Send the model to the aggregator
+    send_model_parameters(serialized_model)
+    

@@ -18,6 +18,7 @@ class P2PNode(tasks_pb2_grpc.TaskServiceServicer):
         self.server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
         self.session_id = ''
         self.aggregator_address = ''
+        self.model = None
         tasks_pb2_grpc.add_TaskServiceServicer_to_server(self, self.server)
 
     def start_server(self):
@@ -38,12 +39,13 @@ class P2PNode(tasks_pb2_grpc.TaskServiceServicer):
 
         try:
             # Deserialize the model and data
-            model = self.deserialize_model(request.model_data)
+            self.model = self.deserialize_model(request.model_data)
             dataset = self.deserialize_data(request.dataset)  # Assuming this returns the path to the dataset file
             hyperparameters = request.hyperparameters  # Now holds the extra params
 
             # Accessing hyperparameters
             training_type = hyperparameters.training
+            strategy_type = hyperparameters.strategy
         except Exception as e:
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details(f'Failed to deserialize data: {str(e)}')
@@ -60,9 +62,9 @@ class P2PNode(tasks_pb2_grpc.TaskServiceServicer):
         
         try:
             if training_type == 'fine_tune':
-                train_finetune.fine_tune_model(model, dataset_path, hyperparameters) 
+                train_finetune.fine_tune_model(self.model, dataset_path, hyperparameters, strategy_type) 
             else:
-                train_transfer.transfer_model(model, dataset_path, hyperparameters)
+                train_transfer.transfer_model(self.model, dataset_path, hyperparameters, strategy_type)
             complete_training_session(self.session_id, is_completed=True)
         except Exception as e:
             context.set_code(grpc.StatusCode.INTERNAL)
@@ -115,10 +117,20 @@ class P2PNode(tasks_pb2_grpc.TaskServiceServicer):
         return data
 
 
-    def update_model_parameters(session_id, parameters):
+    def update_model_parameters(self, session_id, parameters):
         # Update the model gradients
-        pass
+        new_parameters = pickle.loads(parameters)
+        # Assuming the model is stored in self.model
+        self.model.set_weights(new_parameters)
 
+    def send_model_parameters(self, serialized_model):
+        stub = tasks_pb2_grpc.TaskServiceStub(self.aggregator_address)
+        response = stub.RentGPU(tasks_pb2.UpdateModelParametersRequest(session_id=self.session_id, parameters=serialized_model))
+
+        if response.status == 'success':
+            print("Model parameters sent successfully.")
+        else:
+            print("Failed to send model parameters.")
 
 if __name__ == "__main__":
     node = P2PNode()
