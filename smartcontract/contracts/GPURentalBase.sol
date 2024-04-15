@@ -18,8 +18,8 @@ contract GPURentalBase is ReentrancyGuard, Ownable {
         bool isCompleted;
     }
 
+    GPU[] public gpus;
     uint256 public platformCommissionPercent = 2;
-    mapping(uint256 => GPU) public gpus;
     mapping(uint256 => TrainingSession) public sessions;
     mapping(address => uint256) public providerReputation;
 
@@ -30,7 +30,7 @@ contract GPURentalBase is ReentrancyGuard, Ownable {
     event TrainingStarted(uint256 indexed sessionId, address indexed aggregatorNode, string parameterHash);
     event TrainingCompleted(uint256 indexed sessionId, bool isSuccess);
 
-    constructor(address initialOwner) Ownable() {
+    constructor(address initialOwner) Ownable(initialOwner) {
         transferOwnership(initialOwner);
     }
 
@@ -69,18 +69,24 @@ contract GPURentalBase is ReentrancyGuard, Ownable {
     function releaseGPU(uint256 gpuId) external nonReentrant {
         require(!gpus[gpuId].isAvailable, "GPU not rented");
         gpus[gpuId].isAvailable = true;
-        providerReputation[gpus[gpuId].owner]++;
         emit PaymentReleased(gpuId, gpus[gpuId].owner);
     }
 
-    function startTrainingSession(uint256 gpuId, string memory _parameterHash) external returns (uint256) {
+    function startTrainingSession(uint256 gpuId, string memory _parameterHash) external returns (uint256, uint256) {
         require(!gpus[gpuId].isAvailable, "GPU must be rented first");
         uint256 sessionId = uint256(keccak256(abi.encodePacked(block.timestamp, msg.sender, gpuId)));
-        sessions[sessionId] = TrainingSession(msg.sender, _parameterHash);
+        sessions[sessionId] = TrainingSession(msg.sender, _parameterHash, false);
         emit TrainingStarted(sessionId, msg.sender, _parameterHash);
-        return sessionId;
+        
+        // Return session ID and the reputation of the GPU's owner
+        uint256 reputation = providerReputation[gpus[gpuId].owner];
+        return (sessionId, reputation);
     }
 
+    function updateTrainingSession(uint256 sessionId, string memory _parameterHash) external {
+        require(sessions[sessionId].aggregatorNode == msg.sender, "Only aggregator node can update session");
+        sessions[sessionId].parameterHash = _parameterHash;
+    }
 
     function completeTrainingSession(uint256 sessionId, bool isSuccess) external {
         require(!sessions[sessionId].isCompleted, "Session already completed");

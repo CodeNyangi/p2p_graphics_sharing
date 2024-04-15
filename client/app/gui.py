@@ -3,7 +3,7 @@ from tensorflow import distribute
 from transformers import TFAutoModel, AutoConfig
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk, scrolledtext
-from utils import list_gpu, update_gpu_specs
+from utils import list_gpu, rent_gpu, update_gpu_specs, start_training_session, release_gpu, contract_address
 import grpc 
 import pickle
 import tasks_pb2
@@ -14,6 +14,7 @@ class ApplicationGUI(tk.Frame):
         super().__init__(master)
         self.master = master
         self.pack(fill="both", expand=True)
+        self.sessions = []
         self.create_widgets()
 
     def create_widgets(self):
@@ -111,12 +112,17 @@ class ApplicationGUI(tk.Frame):
         for gpu in selected_gpus:
             gpu_id = gpu['id']
             address = gpu['address']
+            aggregator_address = contract_address
             compute_units = gpu['compute_units']
             channel = grpc.insecure_channel(address)
             stub = tasks_pb2_grpc.TaskServiceStub(channel)
-            response = stub.RentGPU(tasks_pb2.RentGPURequest(gpu_id=gpu_id, compute_units=compute_units))
+            response = stub.RentGPU(tasks_pb2.RentGPURequest(gpu_id=gpu_id, compute_units=compute_units, aggregator_address=aggregator_address))
             status = response.status
-            self.update_status(f"Rented GPU {gpu_id} with {compute_units} compute units. Status: {status}.")
+            if status == "success":
+                rent_gpu(gpu_id, compute_units, value=compute_units * gpu['price'])
+                self.update_status(f"Rented GPU {gpu_id} with {compute_units} compute units. Status: {status}.")
+            else:
+                messagebox.showerror("Error", f"Failed to rent GPU {gpu_id}.")
     
 
     # start training session to selecteds address by grpc
@@ -200,19 +206,39 @@ class ApplicationGUI(tk.Frame):
         channel = grpc.insecure_channel(address)
         stub = tasks_pb2_grpc.TaskServiceStub(channel)
 
+        session_id, reputations = start_training_session(gpu_id)
+        # record the reputations and address for the session
+        self.sessions.push({ 'session_id': session_id, 'reputations': reputations, 'address': address })
+
         response = stub.StartTrainingSession(tasks_pb2.StartTrainingSessionRequest(
-            gpu_id=gpu_id,
+            session_id=session_id,
             model_data=serialized_model,
             dataset=serialized_data,
             hyperparameters=tasks_pb2.ModelParameters(epoch=epoch, device=self.device_entry.get(), strategy=self.strategy_var.get(), training=self.training_var.get())
         ))
-
         if response.status != "success":
             messagebox.showerror("Error", f"Failed to send model data to GPU {gpu_id}")
         else:
             messagebox.showinfo("Success", f"Model data sent successfully to GPU {gpu_id}!")
+            # release the gpu
+            release_gpu(gpu_id)
 
-
+    def get_session_info(self, session_id):
+        for session in self.sessions:
+            if session['session_id'] == session_id:
+                return session
+        return None
+    
+    def get_all_sessions(self):
+        return self.sessions
+    
+    # get ring reduce target, which is next to session_id 
+    def get_ring_reduce_target(self, session_id):
+        sessions = self.get_all_sessions()
+        for i in range(len(sessions)):
+            if sessions[i]['session_id'] == session_id:
+                return sessions[(i+1) % len(sessions)]
+        return None        
 
     # List gpu with specs and price and address
     def list_gpu(self):

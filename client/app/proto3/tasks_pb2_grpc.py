@@ -30,10 +30,15 @@ class TaskServiceStub(object):
                 request_serializer=tasks__pb2.StartTrainingSessionRequest.SerializeToString,
                 response_deserializer=tasks__pb2.SessionResponse.FromString,
                 )
+        self.ReceiveModelParameters = channel.unary_unary(
+                '/tasks.TaskService/ReceiveModelParameters',
+                request_serializer=tasks__pb2.ReceiveModelParametersRequest.SerializeToString,
+                response_deserializer=tasks__pb2.GenericResponse.FromString,
+                )
         self.UpdateModelParameters = channel.unary_unary(
                 '/tasks.TaskService/UpdateModelParameters',
                 request_serializer=tasks__pb2.UpdateModelParametersRequest.SerializeToString,
-                response_deserializer=tasks__pb2.UpdateModelParametersResponse.FromString,
+                response_deserializer=tasks__pb2.GenericResponse.FromString,
                 )
 
 
@@ -54,6 +59,12 @@ class TaskServiceServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def StartTrainingSession(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ReceiveModelParameters(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -83,10 +94,15 @@ def add_TaskServiceServicer_to_server(servicer, server):
                     request_deserializer=tasks__pb2.StartTrainingSessionRequest.FromString,
                     response_serializer=tasks__pb2.SessionResponse.SerializeToString,
             ),
+            'ReceiveModelParameters': grpc.unary_unary_rpc_method_handler(
+                    servicer.ReceiveModelParameters,
+                    request_deserializer=tasks__pb2.ReceiveModelParametersRequest.FromString,
+                    response_serializer=tasks__pb2.GenericResponse.SerializeToString,
+            ),
             'UpdateModelParameters': grpc.unary_unary_rpc_method_handler(
                     servicer.UpdateModelParameters,
                     request_deserializer=tasks__pb2.UpdateModelParametersRequest.FromString,
-                    response_serializer=tasks__pb2.UpdateModelParametersResponse.SerializeToString,
+                    response_serializer=tasks__pb2.GenericResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -151,6 +167,23 @@ class TaskService(object):
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
     @staticmethod
+    def ReceiveModelParameters(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/tasks.TaskService/ReceiveModelParameters',
+            tasks__pb2.ReceiveModelParametersRequest.SerializeToString,
+            tasks__pb2.GenericResponse.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
     def UpdateModelParameters(request,
             target,
             options=(),
@@ -163,6 +196,6 @@ class TaskService(object):
             metadata=None):
         return grpc.experimental.unary_unary(request, target, '/tasks.TaskService/UpdateModelParameters',
             tasks__pb2.UpdateModelParametersRequest.SerializeToString,
-            tasks__pb2.UpdateModelParametersResponse.FromString,
+            tasks__pb2.GenericResponse.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
