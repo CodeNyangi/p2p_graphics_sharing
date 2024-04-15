@@ -3,7 +3,7 @@ import tensorflow as tf
 import pickle
 from p2p_node import send_model_parameters
 
-def transfer_model(model, dataset_path, hyperparameters, strategy_type):
+def transfer_model(self, model, dataset_path, hyperparameters, strategy_type):
     # Load dataset
     train_dataset = tf.data.experimental.load(dataset_path)
 
